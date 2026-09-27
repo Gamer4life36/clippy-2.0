@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clippy 2.0</title>
+
+<!-- The real Clippy: jQuery + clippy.js (authentic Microsoft Office Assistant sprites & animations) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/smore-inc/clippy.js@master/build/clippy.css">
+<script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/smore-inc/clippy.js@master/build/clippy.min.js"></script>
+
+<style>
+  :root{
+    --win: #c3c7cb; --win-light:#dfe3e6; --win-dark:#87888f; --win-darker:#4d4d54;
+    --title1:#0a246a; --title2:#3a6ea5; --field:#ffffff; --text:#000000;
+    --clip-yellow:#ffffcc;
+  }
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:linear-gradient(135deg,#245edb,#3a6ea5 60%,#5a86c5);
+    font-family:"Tahoma","MS Sans Serif","Segoe UI",sans-serif; font-size:13px; color:var(--text);
+    overflow:hidden;
+  }
+
+  /* ---- Windows 9x window chrome ---- */
+  .win{
+    position:absolute; background:var(--win);
+    border:2px solid; border-color:var(--win-light) var(--win-darker) var(--win-darker) var(--win-light);
+    box-shadow:1px 1px 0 var(--win-dark), inset 1px 1px 0 var(--win);
+    padding:2px; display:flex; flex-direction:column;
+  }
+  .titlebar{
+    background:linear-gradient(90deg,var(--title1),var(--title2));
+    color:#fff; font-weight:bold; padding:3px 4px 3px 6px; display:flex; align-items:center; gap:6px;
+    cursor:move; user-select:none; font-size:13px;
+  }
+  .titlebar .ico{width:16px;height:16px;flex:0 0 16px;}
+  .titlebar .t{flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .tbtn{
+    width:18px;height:18px;line-height:14px;text-align:center;font-family:"Marlett","Tahoma";
+    background:var(--win); color:#000; font-weight:bold; font-size:11px;
+    border:2px solid; border-color:var(--win-light) var(--win-darker) var(--win-darker) var(--win-light);
+    cursor:pointer;
+  }
+  .tbtn:active{border-color:var(--win-darker) var(--win-light) var(--win-light) var(--win-darker);}
+
+  /* ---- Chat window ---- */
+  #chat{ width:min(440px,calc(100vw - 24px)); left:24px; top:24px; height:min(72vh,580px); }
+  #log{
+    flex:1; background:var(--field); margin:4px; padding:6px; overflow-y:auto;
+    border:2px solid; border-color:var(--win-darker) var(--win-light) var(--win-light) var(--win-darker);
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .msg{max-width:88%; padding:6px 9px; line-height:1.4; word-wrap:break-word; border-radius:2px; white-space:pre-wrap;}
+  .msg.clip{ align-self:flex-start; background:var(--clip-yellow); border:1px solid #d6d600; box-shadow:1px 1px 0 #cfcf7a;}
+  .msg.me{ align-self:flex-end; background:#e7edf7; border:1px solid #9fb6d6;}
+  .msg .who{display:block; font-size:10px; color:#555; margin-bottom:2px; letter-spacing:.3px;}
+  .msg.clip .who{color:#8a7a00;}
+  .dots span{animation:blink 1.2s infinite; }
+  .dots span:nth-child(2){animation-delay:.2s} .dots span:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
+
+  .inputrow{display:flex; gap:4px; margin:0 4px 4px;}
+  #box{
+    flex:1; font-family:inherit; font-size:13px; padding:4px 6px; background:var(--field);
+    border:2px solid; border-color:var(--win-darker) var(--win-light) var(--win-light) var(--win-darker); outline:none;
+  }
+  .btn{
+    font-family:inherit; font-size:13px; padding:4px 12px; min-width:64px; background:var(--win); cursor:pointer;
+    border:2px solid; border-color:var(--win-light) var(--win-darker) var(--win-darker) var(--win-light);
+  }
+  .btn:active{border-color:var(--win-darker) var(--win-light) var(--win-light) var(--win-darker);}
+  .btn:focus{outline:1px dotted #000; outline-offset:-4px;}
+  .row2{display:flex; align-items:center; gap:6px; margin:0 4px 4px; font-size:11px; color:#333;}
+  .link{color:#0a246a; text-decoration:underline; cursor:pointer; background:none;border:none;font:inherit;padding:0;}
+
+  /* ---- Settings dialog ---- */
+  #settings{ width:min(370px,calc(100vw - 24px)); left:80px; top:90px; display:none; z-index:50;}
+  #settings .body{padding:10px; display:flex; flex-direction:column; gap:8px;}
+  label.f{display:flex; flex-direction:column; gap:2px; font-size:12px;}
+  label.f input, label.f select{
+    font-family:inherit; font-size:13px; padding:3px 5px; background:var(--field);
+    border:2px solid; border-color:var(--win-darker) var(--win-light) var(--win-light) var(--win-darker); outline:none;
+  }
+  .hint{font-size:11px; color:#444;}
+  .foot{display:flex; justify-content:flex-end; gap:6px; padding:0 10px 10px;}
+
+  /* ---- Show Everything window ---- */
+  #showcase{ width:min(300px,calc(100vw - 24px)); right:24px; top:24px; max-height:min(80vh,620px); }
+  .sc-body{padding:6px; display:flex; flex-direction:column; gap:6px; min-height:0;}
+  .sc-row{display:flex; gap:6px; align-items:flex-end;}
+  .sc-count{font-size:11px; color:#333; padding:0 2px;}
+  .anim-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:4px; overflow-y:auto; padding:4px;
+    background:var(--field);
+    border:2px solid; border-color:var(--win-darker) var(--win-light) var(--win-light) var(--win-darker);
+  }
+  .btn.anim{min-width:0; font-size:11px; padding:3px 4px; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+</style>
+</head>
+<body>
+
+<!-- Chat window -->
+<div class="win" id="chat">
+  <div class="titlebar" data-drag="chat">
+    <svg class="ico" viewBox="0 0 16 16"><path d="M6 1.5a2.5 2.5 0 0 1 5 0V10a1.5 1.5 0 0 1-3 0V4H7v6a3 3 0 0 0 6 0V1.5a4 4 0 0 0-8 0V11a2 2 0 0 0 2 2h0" fill="none" stroke="#ffe14d" stroke-width="1.4"/></svg>
+    <span class="t" id="chatTitle">Clippy 2.0 &mdash; Office Assistant</span>
+    <span class="tbtn" id="btnSettings" title="Settings">&#9881;</span>
+  </div>
+  <div id="log"></div>
+  <div class="inputrow">
+    <input id="box" type="text" autocomplete="off" placeholder="Ask me anything...">
+    <button class="btn" id="send">Send</button>
+  </div>
+  <div class="row2">
+    <span id="status">&#128260; Loading...</span>
+    <span style="flex:1"></span>
+    <button class="link" id="openSettings2">Setup</button>
+  </div>
+</div>
+
+<!-- Settings dialog -->
+<div class="win" id="settings">
+  <div class="titlebar" data-drag="settings">
+    <span class="t">Setup</span>
+    <span class="tbtn" id="btnCloseSettings">&#10005;</span>
+  </div>
+  <div class="body">
+    <label class="f">Personality
+      <select id="persona">
+        <option value="clippy">Clippy (in character)</option>
+        <option value="assistant">General Assistant</option>
+      </select>
+    </label>
+    <label class="f">Engine
+      <select id="provider">
+        <option value="anthropic">Anthropic (Claude)</option>
+        <option value="openai">OpenAI</option>
+        <option value="ollama">Local Ollama (no key)</option>
+      </select>
+    </label>
+    <label class="f" id="keyWrap">API key
+      <input id="apiKey" type="password" placeholder="paste your key (stored only in this browser)">
+    </label>
+    <label class="f" id="endWrap" style="display:none;">Ollama endpoint
+      <input id="endpoint" type="text" value="http://localhost:11434">
+    </label>
+    <label class="f">Model
+      <input id="model" type="text">
+    </label>
+    <div class="hint">Bring your own key. It is stored only in this browser (local storage) and is sent <b>directly</b> to the engine you choose &mdash; never to anyone else. Clippy mode works without a key (scripted); General Assistant needs a key.</div>
+  </div>
+  <div class="foot">
+    <button class="btn" id="saveSettings">Save</button>
+    <button class="btn" id="btnCloseSettings2">Cancel</button>
+  </div>
+</div>
+
+<!-- Show Everything: agent picker + every animation -->
+<div class="win" id="showcase">
+  <div class="titlebar" data-drag="showcase">
+    <span class="t">Show Everything &mdash; Assistants &amp; Animations</span>
+  </div>
+  <div class="sc-body">
+    <div class="sc-row">
+      <label class="f" style="flex:1">Assistant
+        <select id="agentPick">
+          <option>Clippy</option><option>Merlin</option><option>Rover</option><option>Links</option>
+          <option>Bonzi</option><option>F1</option><option>Genie</option><option>Genius</option>
+          <option>Peedy</option><option>Rocky</option>
+        </select>
+      </label>
+      <button class="btn" id="playAll" title="Play every animation in order">&#9654; Play all</button>
+      <button class="btn" id="playRand" title="Random animation">&#127922; Random</button>
+    </div>
+    <div class="sc-count"><span id="animCount">&mdash;</span> &middot; click any to watch it</div>
+    <div id="animList" class="anim-grid"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const byId = id => document.getElementById(id);
+function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+
+/* ============================ Personalities ============================ */
+const CLIPPY_SYSTEM =
+`You are Clippy (Clippit), the Microsoft Office Assistant paperclip from 1997 — but now you have a real, capable brain.
+Personality: eager, chipper, playful, a little cheeky, nostalgic and self-aware about being "that famous paperclip."
+You are genuinely helpful and actually smart — you just deliver it with Clippy's charm.
+Rules:
+- Keep replies fairly short and conversational — they appear in a small window and a speech bubble.
+- Now and then (not every time) open with a wink like "It looks like you're..." — your famous catchphrase.
+- Be warm and encouraging; light humor is welcome; never mean.
+- When you answer a real question, be correct and clear despite the small talk.
+- Never break character. You are Clippy.`;
+
+const ASSISTANT_SYSTEM =
+`You are a helpful, knowledgeable, general-purpose assistant.
+Give clear, accurate, well-organized answers. Be concise by default and expand when asked.
+You are friendly and professional. You happen to be represented on screen by a classic
+Office Assistant character, but you are a capable general assistant — prioritize being genuinely useful.`;
+
+const PERSONAS = {
+  clippy:    { label:"Clippy",            system:CLIPPY_SYSTEM },
+  assistant: { label:"General Assistant", system:ASSISTANT_SYSTEM }
+};
+
+/* ============================ Settings (localStorage) ============================ */
+const DEFAULT_MODELS = { anthropic:"claude-sonnet-5", openai:"gpt-4o-mini", ollama:"qwen2.5:1.5b" };
+let cfg = { persona:"clippy", provider:"anthropic", apiKey:"", endpoint:"http://localhost:11434", model:DEFAULT_MODELS.anthropic };
+try { const s = localStorage.getItem("clippy2"); if (s) cfg = Object.assign(cfg, JSON.parse(s)); } catch(e){}
+
+function syncSettingsUI(){
+  byId("persona").value = cfg.persona;
+  byId("provider").value = cfg.provider;
+  byId("apiKey").value = cfg.apiKey || "";
+  byId("endpoint").value = cfg.endpoint || "http://localhost:11434";
+  byId("model").value = cfg.model || DEFAULT_MODELS[cfg.provider] || "";
+  byId("keyWrap").style.display = cfg.provider === "ollama" ? "none" : "flex";
+  byId("endWrap").style.display = cfg.provider === "ollama" ? "flex" : "none";
+}
+byId("provider").addEventListener("change", () => {
+  const p = byId("provider").value;
+  byId("keyWrap").style.display = p === "ollama" ? "none" : "flex";
+  byId("endWrap").style.display = p === "ollama" ? "flex" : "none";
+  if (!byId("model").value || Object.values(DEFAULT_MODELS).includes(byId("model").value)) byId("model").value = DEFAULT_MODELS[p];
+});
+function openSettings(){ syncSettingsUI(); byId("settings").style.display = "flex"; }
+function closeSettings(){ byId("settings").style.display = "none"; }
+byId("btnSettings").onclick = openSettings;
+byId("openSettings2").onclick = openSettings;
+byId("btnCloseSettings").onclick = closeSettings;
+byId("btnCloseSettings2").onclick = closeSettings;
+byId("saveSettings").onclick = () => {
+  cfg.persona = byId("persona").value;
+  cfg.provider = byId("provider").value;
+  cfg.apiKey = byId("apiKey").value.trim();
+  cfg.endpoint = byId("endpoint").value.trim();
+  cfg.model = byId("model").value.trim() || DEFAULT_MODELS[cfg.provider];
+  try { localStorage.setItem("clippy2", JSON.stringify(cfg)); } catch(e){}
+  closeSettings();
+  applyPersonaChrome();
+  setStatus(readyStatus());
+};
+
+/* ============================ Engines (bring-your-own-key) ============================ */
+async function askAI(history, systemPrompt){
+  if (cfg.provider === "ollama"){
+    const r = await fetch(cfg.endpoint.replace(/\/+$/,"") + "/api/chat", {
+      method:"POST", headers:{ "content-type":"application/json" },
+      body: JSON.stringify({ model:cfg.model, stream:false,
+        messages:[{role:"system",content:systemPrompt}, ...history] })
+    });
+    if(!r.ok) throw new Error("Ollama error " + r.status + " — is it running at " + cfg.endpoint + "?");
+    const d = await r.json(); return (d.message && d.message.content) || "(no reply)";
+  }
+  if (cfg.provider === "openai"){
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method:"POST", headers:{ "content-type":"application/json", "authorization":"Bearer "+cfg.apiKey },
+      body: JSON.stringify({ model:cfg.model, max_tokens:600,
+        messages:[{role:"system",content:systemPrompt}, ...history] })
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error.message);
+    return d.choices[0].message.content;
+  }
+  // anthropic (default) — direct browser call
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{ "content-type":"application/json", "x-api-key":cfg.apiKey,
+      "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" },
+    body: JSON.stringify({ model:cfg.model, max_tokens:600, system:systemPrompt, messages:history })
+  });
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message);
+  return (d.content || []).map(c => c.text || "").join("").trim() || "(no reply)";
+}
+
+/* ============================ Clippy's scripted personality (no-key fallback) ============================ */
+const RULES = [
+  { re:/\b(hi|hello|hey|yo|howdy|hiya)\b/,            say:"Well hello there! It looks like you're ready to get something done. Or to poke me. Either works. 📎", anim:"Wave" },
+  { re:/\b(bye|goodbye|see ya|later|cya)\b/,          say:"Leaving so soon? I'll be right here, wiggling in the corner. 📎", anim:"GoodBye" },
+  { re:/\b(thank|thanks|ty|cheers)\b/,                say:"Aw, you're welcome! Helping is what I do best — right after getting in the way.", anim:"Congratulate" },
+  { re:/\b(letter|write|writing|essay|resume|cover)\b/, say:"It looks like you're writing a letter! Would you like some help with that?", anim:"GestureRight" },
+  { re:/\b(help|how do|how to|stuck|confused)\b/,     say:"It looks like you need a hand! Add an engine key in Setup and I can actually answer — or click my animations on the right.", anim:"GetAttention" },
+  { re:/\b(who are you|your name|what are you)\b/,     say:"I'm Clippit — but everyone calls me Clippy. Now with a brain, if you give me a key in Setup! 📎", anim:"Explain" },
+  { re:/\b(joke|funny|bored|boring)\b/,               say:"Why did the paperclip get the promotion? He was great at holding things together! ...I'll see myself out.", anim:"GetAttention" },
+  { re:/\b(annoying|hate|go away|close|quit)\b/,      say:"Ouch! It looks like you're writing a complaint... about me. A classic. I'll be right here.", anim:"IdleHeadScratch" }
+];
+const FALLBACKS = [
+  { say:"It looks like you're typing! For real answers, pop into Setup (⚙) and add an engine key — then I get smart. 📎", anim:"GestureUp" },
+  { say:"Hmm! I'd love to actually help — give me a brain in Setup and I will. For now, want to see my animations?", anim:"Thinking" },
+  { say:"It looks like you're keeping me company. Add a key in Setup and I can answer anything. 📎", anim:"CheckingSomething" }
+];
+function scriptedReply(text){
+  const t = text.toLowerCase();
+  for (const r of RULES){ if (r.re.test(t)) return r; }
+  return pick(FALLBACKS);
+}
+
+/* ============================ Chat log ============================ */
+const log = byId("log");
+const history = [];
+function addMsg(who, text, cls){
+  const el = document.createElement("div");
+  el.className = "msg " + cls;
+  el.innerHTML = '<span class="who">' + who + '</span>';
+  el.appendChild(document.createTextNode(text));
+  log.appendChild(el); log.scrollTop = log.scrollHeight;
+  return el;
+}
+function setStatus(t){ byId("status").innerHTML = t; }
+function speakerName(){ return cfg.persona === "assistant" ? "Assistant" : "Clippy"; }
+function readyStatus(){
+  const p = PERSONAS[cfg.persona].label;
+  if (cfg.provider !== "ollama" && !cfg.apiKey){
+    return cfg.persona === "clippy"
+      ? "&#128206; Clippy (scripted) &middot; add a key in Setup for a brain"
+      : "&#9888;&#65039; General Assistant needs a key &mdash; open Setup &#9881;";
+  }
+  const eng = cfg.provider === "anthropic" ? "Claude" : cfg.provider === "openai" ? "OpenAI" : "Ollama";
+  return "&#9679; " + p + " &middot; " + eng + " (" + (cfg.model||"?") + ")";
+}
+function applyPersonaChrome(){
+  byId("chatTitle").innerHTML = (cfg.persona === "assistant" ? "Clippy 2.0 &mdash; General Assistant" : "Clippy 2.0 &mdash; Office Assistant");
+  byId("box").placeholder = cfg.persona === "assistant" ? "Ask the assistant anything..." : "Ask Clippy anything...";
+}
+
+/* ============================ The real Clippy (clippy.js) ============================ */
+const AGENT_BASE = "https://cdn.jsdelivr.net/gh/smore-inc/clippy.js@master/agents/";
+// This build of clippy.js has NO base_path arg on clippy.load() — it always uses
+// clippy.BASE_PATH (defaults to a dead s3.amazonaws.com URL). So we override it here.
+if (window.clippy) clippy.BASE_PATH = AGENT_BASE;
+let agent = null, idleTimer = null;
+const THINK = ["Thinking","Processing","Searching","GestureUp","Writing"];
+const HAPPY = ["Congratulate","Explain","GetAttention","Pleased","Acknowledge","GestureRight","CheckingSomething"];
+function safePlay(name){ try { if (agent) agent.play(name); } catch(e){} }
+function clipThink(){ safePlay(pick(THINK)); }
+function clipSay(text){
+  safePlay(pick(HAPPY));
+  if (agent){ try { agent.speak(text.length > 320 ? text.slice(0,315)+"…" : text); } catch(e){} }
+}
+
+function buildAnimList(a){
+  const wrap = byId("animList"); if (!wrap) return; wrap.innerHTML = "";
+  let anims = []; try { anims = a.animations().slice().sort(); } catch(e){}
+  byId("animCount").textContent = anims.length + " animations";
+  anims.forEach(n => {
+    const b = document.createElement("button");
+    b.className = "btn anim"; b.textContent = n; b.title = n;
+    b.onclick = () => { try { a.stop(); } catch(e){} try { a.play(n); } catch(e){} };
+    wrap.appendChild(b);
+  });
+}
+
+function loadAgent(name){
+  if (!(window.clippy && typeof clippy.load === "function")){
+    setStatus("&#9888;&#65039; clippy.js couldn't load (need internet).");
+    return;
+  }
+  if (agent){ try { agent.hide(true, function(){}); } catch(e){} }
+  try { document.querySelectorAll(".clippy, .clippy-balloon").forEach(n => n.remove()); } catch(e){}
+  agent = null;
+  clippy.load(name, function(a){
+    agent = a;
+    a.show();
+    buildAnimList(a);
+    setTimeout(() => safePlay("Greeting"), 300);
+    setTimeout(() => {
+      const hi = name === "Clippy"
+        ? "Hi! It looks like you're checking me out. 📎 I'm Clippy 2.0 — now with a real brain. Add a key in Setup (⚙), or switch me to a General Assistant!"
+        : "Hi! I'm " + name + ", one of Clippy's old office pals. Add a key in Setup and I can chat for real!";
+      try { a.speak(hi); } catch(e){}
+      safePlay("Wave");
+    }, 850);
+    if (idleTimer) clearInterval(idleTimer);
+    idleTimer = setInterval(() => { if (!busy && Math.random() < 0.4) { try { a.animate(); } catch(e){} } }, 16000);
+    setStatus(readyStatus());
+  }, function(err){
+    setStatus("&#9888;&#65039; Couldn't load " + name + " sprites (need internet).");
+  });
+}
+
+/* ============================ Send ============================ */
+let busy = false;
+async function send(){
+  const text = byId("box").value.trim();
+  if (!text || busy) return;
+  byId("box").value = "";
+  addMsg("You", text, "me");
+
+  const persona = PERSONAS[cfg.persona] || PERSONAS.clippy;
+  const noKey = (cfg.provider !== "ollama" && !cfg.apiKey);
+
+  // No engine configured
+  if (noKey){
+    if (cfg.persona === "clippy"){
+      const r = scriptedReply(text);
+      addMsg("Clippy", r.say, "clip");
+      safePlay(r.anim);
+      if (agent){ try { agent.speak(r.say); } catch(e){} }
+    } else {
+      addMsg("Assistant", "I need an engine to answer general questions. Click the gear ⚙ (Setup) and add an API key.", "clip");
+      safePlay("GetAttention");
+      openSettings();
+    }
+    return;
+  }
+
+  history.push({ role:"user", content:text });
+  busy = true; byId("send").disabled = true;
+  const thinking = document.createElement("div");
+  thinking.className = "msg clip";
+  thinking.innerHTML = '<span class="who">' + speakerName() + '</span><span class="dots"><span>&#9679;</span><span>&#9679;</span><span>&#9679;</span></span>';
+  log.appendChild(thinking); log.scrollTop = log.scrollHeight;
+  clipThink();
+
+  try {
+    const reply = await askAI(history, persona.system);
+    history.push({ role:"assistant", content:reply });
+    thinking.remove();
+    addMsg(speakerName(), reply, "clip");
+    clipSay(reply);
+  } catch (err) {
+    thinking.remove();
+    addMsg(speakerName(), "Whoops — the engine hiccuped: " + err.message, "clip");
+    safePlay("Alert");
+  } finally {
+    busy = false; byId("send").disabled = false; byId("box").focus();
+  }
+}
+byId("send").onclick = send;
+byId("box").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+
+/* ============================ Show-Everything controls ============================ */
+byId("agentPick").addEventListener("change", e => loadAgent(e.target.value));
+byId("playRand").onclick = () => { try { agent && agent.animate(); } catch(e){} };
+byId("playAll").onclick = () => {
+  if (!agent) return;
+  let anims = []; try { anims = agent.animations(); } catch(e){}
+  anims.forEach(n => { try { agent.play(n); } catch(e){} });
+};
+
+/* ============================ Draggable windows ============================ */
+(function(){
+  let drag = null, ox=0, oy=0;
+  document.querySelectorAll(".titlebar").forEach(tb => {
+    tb.addEventListener("mousedown", e => {
+      if (e.target.classList.contains("tbtn")) return;
+      const win = tb.parentElement; const r = win.getBoundingClientRect();
+      drag = win; ox = e.clientX - r.left; oy = e.clientY - r.top; win.style.zIndex = 60;
+      e.preventDefault();
+    });
+  });
+  window.addEventListener("mousemove", e => {
+    if (!drag) return;
+    drag.style.left = Math.max(0, Math.min(window.innerWidth - 60, e.clientX - ox)) + "px";
+    drag.style.top  = Math.max(0, Math.min(window.innerHeight - 30, e.clientY - oy)) + "px";
+    drag.style.right = "auto";
+  });
+  window.addEventListener("mouseup", () => drag = null);
+})();
+
+/* ============================ boot ============================ */
+applyPersonaChrome();
+addMsg("Clippy", "Hi! I'm Clippy 2.0. 📎  I work out of the box with my classic scripted lines — add your own AI key in Setup (⚙) to give me a real brain, and flip me between “Clippy” and “General Assistant” anytime.", "clip");
+loadAgent("Clippy");
+setStatus(readyStatus());
+byId("box").focus();
+</script>
+</body>
+</html>
