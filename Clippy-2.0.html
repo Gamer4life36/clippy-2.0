@@ -109,6 +109,7 @@
     <span class="t" id="chatTitle">Clippy 2.0 &mdash; Office Assistant</span>
     <span class="tbtn" id="btnMute" title="Mute sounds">&#128266;</span>
     <span class="tbtn" id="btnSettings" title="Settings">&#9881;</span>
+    <span class="tbtn" id="btnClose" title="Shut Clippy down">&#10005;</span>
   </div>
   <div id="log"></div>
   <div class="inputrow">
@@ -353,7 +354,7 @@ function setMuted(v){
 byId("btnMute").onclick = () => setMuted(!cfg.muted);
 setMuted(cfg.muted); // apply persisted state before the agent loads
 
-let agent = null, idleTimer = null;
+let agent = null, idleTimer = null, shutDown = false;
 const THINK = ["Thinking","Processing","Searching","GestureUp","Writing"];
 const HAPPY = ["Congratulate","Explain","GetAttention","Pleased","Acknowledge","GestureRight","CheckingSomething"];
 function safePlay(name){ try { if (agent) agent.play(name); } catch(e){} }
@@ -375,6 +376,41 @@ function buildAnimList(a){
   });
 }
 
+/* ---- Idle fidget + full shutdown (stop animations AND sounds) ---- */
+function startIdle(){
+  if (idleTimer) clearInterval(idleTimer);
+  idleTimer = setInterval(() => {
+    if (!busy && !shutDown && !document.hidden && agent && Math.random() < 0.4) { try { agent.animate(); } catch(e){} }
+  }, 16000);
+}
+function silenceAgent(a){
+  // hard-stop any in-flight clippy.js sound effects
+  try { const an = a && a._animator; if (an && an._sounds){ for (const k in an._sounds){ try { an._sounds[k].pause(); an._sounds[k].currentTime = 0; } catch(e){} } } } catch(e){}
+}
+function stopAgent(a){
+  if (!a) return;
+  try { a.stopCurrent(); } catch(e){}
+  try { a.stop(); } catch(e){}
+  try { a.pause(); } catch(e){}
+  silenceAgent(a);
+}
+function shutdownClippy(){
+  shutDown = true;
+  if (idleTimer){ clearInterval(idleTimer); idleTimer = null; }
+  window.__clippyMuted = true;                 // block any queued sounds immediately
+  stopAgent(agent);
+  if (agent){ try { agent.hide(true, function(){}); } catch(e){} }
+  try { document.querySelectorAll(".clippy, .clippy-balloon").forEach(n => n.remove()); } catch(e){}
+  agent = null;
+  setStatus('&#9899; Clippy is off &middot; <span id="wake" style="color:#0a246a;text-decoration:underline;cursor:pointer">Wake Clippy</span>');
+  const w = byId("wake"); if (w) w.onclick = wakeClippy;
+}
+function wakeClippy(){
+  shutDown = false;
+  setMuted(cfg.muted);                         // restore your mute preference
+  loadAgent(byId("agentPick") ? byId("agentPick").value : "Clippy");
+}
+
 function loadAgent(name){
   if (!(window.clippy && typeof clippy.load === "function")){
     setStatus("&#9888;&#65039; clippy.js couldn't load (need internet).");
@@ -384,7 +420,7 @@ function loadAgent(name){
   try { document.querySelectorAll(".clippy, .clippy-balloon").forEach(n => n.remove()); } catch(e){}
   agent = null;
   clippy.load(name, function(a){
-    agent = a;
+    agent = a; shutDown = false;
     a.show();
     buildAnimList(a);
     setTimeout(() => safePlay("Greeting"), 300);
@@ -395,8 +431,7 @@ function loadAgent(name){
       try { a.speak(hi); } catch(e){}
       safePlay("Wave");
     }, 850);
-    if (idleTimer) clearInterval(idleTimer);
-    idleTimer = setInterval(() => { if (!busy && Math.random() < 0.4) { try { a.animate(); } catch(e){} } }, 16000);
+    startIdle();
     setStatus(readyStatus());
   }, function(err){
     setStatus("&#9888;&#65039; Couldn't load " + name + " sprites (need internet).");
@@ -462,6 +497,27 @@ byId("playAll").onclick = () => {
   let anims = []; try { anims = agent.animations(); } catch(e){}
   anims.forEach(n => { try { agent.play(n); } catch(e){} });
 };
+
+/* ============================ Shutdown / go-quiet ============================ */
+byId("btnClose").onclick = shutdownClippy;
+// When the tab is hidden or loses focus, stop animating and go silent.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden){
+    if (idleTimer){ clearInterval(idleTimer); idleTimer = null; }
+    if (agent){ try { agent.stopCurrent(); } catch(e){} try { agent.pause(); } catch(e){} silenceAgent(agent); }
+  } else if (!shutDown && agent){
+    try { agent.resume(); } catch(e){}
+    startIdle();
+  }
+});
+// When the page is closed/navigated away, stop everything hard.
+function shutdownHard(){
+  if (idleTimer){ clearInterval(idleTimer); idleTimer = null; }
+  window.__clippyMuted = true;
+  stopAgent(agent);
+}
+window.addEventListener("pagehide", shutdownHard);
+window.addEventListener("beforeunload", shutdownHard);
 
 /* ============================ Draggable windows ============================ */
 (function(){
