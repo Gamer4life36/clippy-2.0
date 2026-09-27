@@ -30,5 +30,6 @@ Your API key is **bring-your-own**, stored **only in your browser's local storag
 ## License & non-commercial use
 - The **original code** in this repo is licensed under the **PolyForm Noncommercial License 1.0.0** — free for any non-commercial purpose, **no selling**. See [`LICENSE`](LICENSE).
 - The Clippy characters/assets are **Microsoft's**, are **not** included in this repo, and are **not** covered by that license. See [`NOTICE.md`](NOTICE.md).
+- The project's good-faith **fair-use position** (copyright + trademark, with the four-factor analysis and disclaimers) is documented in [`FAIR_USE.md`](FAIR_USE.md).
 
 **This is a free, non-commercial fan project, not affiliated with Microsoft.**
